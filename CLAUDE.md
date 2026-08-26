@@ -4,15 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Two PHP/Symfony microservices (`user-service`, `client-service`) plus a full
-observability stack (OpenTelemetry Collector, Tempo, Prometheus, Loki,
-Promtail, Grafana), orchestrated by a single root `docker-compose.yml`.
-`user-service` owns users; `client-service` owns clients and calls
-`user-service` over HTTP to enrich a client with its associated user's data.
-There is no code shared between the two services — each is a fully
-independent Symfony app under `services/<name>/`, deliberately duplicated
-(Kernel, Tracing bootstrap, subscribers) rather than factored into a shared
-package.
+Three PHP/Symfony microservices (`user-service`, `client-service`,
+`notification-service`) plus a full observability stack (OpenTelemetry
+Collector, Tempo, Prometheus, Loki, Promtail, Grafana) and messaging
+(RabbitMQ, Mailpit), orchestrated by a single root `docker-compose.yml`.
+
+- `user-service` owns users; on `POST /api/users` it also publishes a
+  `user.registered` event to RabbitMQ (best effort — never fails the request).
+- `client-service` owns clients and calls `user-service` over HTTP
+  (synchronous) to enrich a client with its associated user's data.
+- `notification-service` consumes `user.registered` from RabbitMQ
+  (asynchronous) and sends a welcome email (Symfony Mailer → Mailpit in dev).
+  It has no business HTTP API, only `/health` and `/metrics`.
+
+There is no code shared between the services — each is a fully independent
+Symfony app under `services/<name>/`, deliberately duplicated (Kernel,
+Tracing bootstrap, subscribers) rather than factored into a shared package.
+The messaging contract between user-service and notification-service is a
+plain JSON schema on the wire (not a shared PHP class), specifically to
+avoid coupling two independently-deployable services to the same class —
+see "Messaging contract" below.
 
 ## Commands
 
@@ -36,17 +47,21 @@ docker compose exec <service> php bin/console doctrine:schema:update --force   #
 docker compose exec user-service php bin/console doctrine:fixtures:load --no-interaction
 docker compose exec client-service php bin/console doctrine:fixtures:load --no-interaction
 
+# inspect RabbitMQ / consumed messages / dead-letters
+docker compose exec rabbitmq rabbitmqctl list_queues name messages consumers
+curl -s http://localhost:8025/api/v1/messages | python3 -m json.tool   # Mailpit inbox
+
 # logs
-docker compose logs -f user-service client-service
+docker compose logs -f user-service client-service notification-service
 docker compose logs -f otel-collector
 
-# stop (keep volumes) / stop + wipe volumes (Postgres/Grafana/Prometheus data)
+# stop (keep volumes) / stop + wipe volumes (Postgres/Grafana/Prometheus/RabbitMQ data)
 docker compose down
 docker compose down -v
 
 # rebuild + recreate a single service after code/composer.json changes
-docker compose build user-service client-service
-docker compose up -d user-service client-service
+docker compose build user-service client-service notification-service
+docker compose up -d user-service client-service notification-service
 
 # resolve/update PHP deps for one service (run inside a throwaway container)
 docker compose run --rm user-service composer update --with-all-dependencies
@@ -74,12 +89,18 @@ curl -s -X POST http://localhost:8082/api/clients \
   -d '{"companyName":"Acme","userId":1}'
 
 curl -s http://localhost:8082/api/clients/1   # must include a populated "user" object
+
+# the POST /api/users call above also triggers an async welcome email —
+# check it landed in Mailpit within a few seconds:
+curl -s http://localhost:8025/api/v1/messages | python3 -m json.tool
 ```
 
-Health: `GET /health` on 8081/8082. Metrics: `GET /metrics` on 8081/8082
-(Prometheus text format). Observability UIs: Grafana `:3000` (anonymous
-auth enabled in dev), Prometheus `:9090`, Tempo query API `:3200`, Loki
-`:3100`.
+Health: `GET /health` on 8081/8082/8083. Metrics: `GET /metrics` on
+8081/8082/8083 (Prometheus text format — notification-service's only
+covers its own HTTP traffic, see "Messaging contract" below for why).
+Observability UIs: Grafana `:3000` (anonymous auth enabled in dev),
+Prometheus `:9090`, Tempo query API `:3200`, Loki `:3100`, RabbitMQ
+management `:15672` (guest/guest), Mailpit `:8025`.
 
 ## Architecture
 
@@ -130,14 +151,80 @@ validate `userId` exists before `POST /api/clients`. `user-service`'s
 `TracingSubscriber` picks up the propagated `traceparent` on the inbound
 request, so a single trace spans both services end-to-end in Tempo.
 
+### Messaging contract (user-service → RabbitMQ → notification-service)
+
+Deliberately built on raw `php-amqplib/php-amqplib`, not Symfony Messenger —
+Messenger's AMQP transport ties producer and consumer to the *same PHP
+class* for (de)serialization, which is fine in a monorepo but wrong for
+two independently-deployable services with no shared package. The contract
+here is a plain JSON schema instead:
+
+```
+exchange:      user_events            (topic, durable)
+routing key:   user.registered
+queue:         notification_service.user_registered   (durable)
+dead-letter:   user_events.dlx (fanout) → notification_service.user_registered.dead
+payload:       { eventId, eventType, occurredAt, data: { id, email, firstName, lastName } }
+```
+
+- **Publisher**: `user-service`'s `src/Messaging/UserEventPublisher.php`,
+  called from `UserController::create()` after the user is persisted.
+  Opens a new AMQP connection per publish (no pooling — acceptable at this
+  volume, see file comment). Failures are logged/traced but never fail the
+  HTTP request — the event is best-effort.
+- **Consumer**: `notification-service`'s
+  `src/Command/ConsumeUserEventsCommand.php` (`app:consume-user-events`),
+  a long-running loop, not a web request. Manually acks on success; on any
+  failure it `nack`s without requeue, routing the message to the dead-letter
+  queue instead of retrying forever. No deduplication — a redelivery after
+  a mid-processing crash can send a duplicate email.
+- **Trace propagation over AMQP**: the publisher injects the W3C
+  `traceparent` into the message's `application_headers`; the consumer
+  extracts it (`ConsumeUserEventsCommand::extractTraceContext`) and starts
+  its CONSUMER span as a child of it. The result: a single Tempo trace
+  spans `POST /api/users` (user-service) → the AMQP hop → the consumer's
+  `user_events user.registered process` span (notification-service) — the
+  same pattern as the HTTP propagation above, just over a different
+  transport. Log correlation (`trace_id` in Monolog) works the same way
+  too, since `Otel\Tracing::init()` also runs from `bin/console` (all
+  three services), not just `public/index.php`.
+
+### `notification-service` runs two processes in one container
+
+Its `Dockerfile` installs `supervisor` and runs both under it (config:
+`services/notification-service/docker/supervisord.conf`):
+1. `frankenphp run ...` — serves `/health` and `/metrics` only.
+2. `php bin/console app:consume-user-events` — the RabbitMQ consumer loop.
+
+**These are two separate PHP processes, and APCu is *not* shared between
+them.** An earlier attempt to force-share the Prometheus `CollectorRegistry`
+(APCu-backed) across both via a fixed `apc.mmap_file_mask` path failed:
+APCu's mmap backend calls `mkstemp()`, which requires a unique `XXXXXX`
+template and therefore always creates a *new* file/segment per process,
+regardless of the configured mask. There is no cheap way to share APCu
+across genuinely separate PHP processes here. Consequence: the consumer's
+business activity (emails sent/failed) is **not** in `/metrics` — it's
+only visible via logs (Loki) and traces (Tempo, per the propagation above).
+If you need those as Prometheus metrics, look at a push-based approach
+(Pushgateway) or an in-process embedded metrics server in the consumer,
+not APCu sharing.
+
+Also note: `apt-get install supervisor` pulls in `tzdata`, which prompts
+interactively unless `DEBIAN_FRONTEND=noninteractive` is set before the
+`apt-get install` line — omitting it hangs the `docker build` indefinitely
+with no error (this bit us once; the env var is in the Dockerfile for
+exactly this reason).
+
 ### Observability data flow
 
 - **Traces**: app → OTLP/HTTP → `otel-collector:4318` → OTLP/gRPC →
   `tempo:4317`. Config: `observability/otel-collector/config.yaml`,
   `observability/tempo/tempo.yaml`.
-- **Metrics**: Prometheus scrapes `user-service:80/metrics` and
-  `client-service:80/metrics` directly (`observability/prometheus/prometheus.yml`)
-  — metrics do **not** go through the OTel Collector in this setup.
+- **Metrics**: Prometheus scrapes `user-service:80/metrics`,
+  `client-service:80/metrics` and `notification-service:80/metrics`
+  directly (`observability/prometheus/prometheus.yml`) — metrics do
+  **not** go through the OTel Collector in this setup. See above for why
+  `notification-service`'s consumer activity isn't in there.
 - **Logs**: Monolog writes JSON to stdout (with `trace_id`/`span_id`) →
   Promtail reads Docker container logs → Loki. No app-side dependency on
   Loki. Config: `observability/promtail/promtail-config.yaml`,
@@ -161,3 +248,10 @@ request, so a single trace spans both services end-to-end in Tempo.
   `scripts/postgres/init-multiple-dbs.sh` via `POSTGRES_MULTIPLE_DATABASES`
   — this only runs on first volume creation; changing the script later
   requires `docker compose down -v`.
+- `php-amqplib/php-amqplib` needs `ext-sockets`, which isn't installed by
+  default on `dunglas/frankenphp` — it's in the `install-php-extensions`
+  list on `user-service` and `notification-service` only (`client-service`
+  doesn't talk to RabbitMQ, so it doesn't need it).
+- If `otel-collector` was restarted right after `rabbitmq`/`tempo` came
+  back up, give it a `docker compose restart otel-collector` too — see the
+  gRPC stale-DNS gotcha above; it applies to any container it exports to.

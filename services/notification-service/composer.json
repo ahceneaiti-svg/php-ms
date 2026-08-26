@@ -5,10 +5,7 @@
         "ext-ctype": "*",
         "ext-iconv": "*",
         "ext-apcu": "*",
-        "ext-pdo": "*",
-        "doctrine/dbal": "^3.8",
-        "doctrine/doctrine-bundle": "^2.11",
-        "doctrine/orm": "^3.1",
+        "ext-pcntl": "*",
         "monolog/monolog": "^3.5",
         "nyholm/psr7": "^1.8",
         "open-telemetry/api": "^1.0",
@@ -22,13 +19,10 @@
         "symfony/dotenv": "^7.2",
         "symfony/framework-bundle": "^7.2",
         "symfony/http-client": "^7.2",
+        "symfony/mailer": "^7.2",
         "symfony/monolog-bundle": "^3.10",
         "symfony/psr-http-message-bridge": "^7.2",
         "symfony/yaml": "^7.2"
-    },
-    "require-dev": {
-        "doctrine/doctrine-fixtures-bundle": "^3.6",
-        "fakerphp/faker": "^1.23"
     },
     "config": {
         "allow-plugins": {

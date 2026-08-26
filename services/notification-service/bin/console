@@ -12,7 +12,7 @@ set_time_limit(0);
 require dirname(__DIR__).'/vendor/autoload.php';
 
 Tracing::init(
-    $_SERVER['OTEL_SERVICE_NAME'] ?? $_ENV['OTEL_SERVICE_NAME'] ?? 'client-service',
+    $_SERVER['OTEL_SERVICE_NAME'] ?? $_ENV['OTEL_SERVICE_NAME'] ?? 'notification-service',
     $_SERVER['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? $_ENV['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? 'http://otel-collector:4318'
 );
 

@@ -8,6 +8,7 @@ volumes:
   loki_data:
   grafana_data:
   tempo_data:
+  rabbitmq_data:
 
 services:
   postgres:
@@ -36,11 +37,18 @@ services:
       DATABASE_URL: "postgresql://app:app@postgres:5432/user_db?serverVersion=16&charset=utf8"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       OTEL_SERVICE_NAME: user-service
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_VHOST: /
     depends_on:
       postgres:
         condition: service_healthy
       otel-collector:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "8081:80"
     networks:
@@ -64,6 +72,58 @@ services:
         condition: service_started
     ports:
       - "8082:80"
+    networks:
+      - microservices-net
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - microservices-net
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - microservices-net
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+    environment:
+      APP_ENV: dev
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: notification-service
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_VHOST: /
+      MAILER_DSN: smtp://mailpit:1025
+      MAIL_FROM: notifications@php-ms.local
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+      mailpit:
+        condition: service_started
+    ports:
+      - "8083:80"
     networks:
       - microservices-net
 

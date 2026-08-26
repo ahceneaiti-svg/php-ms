@@ -2,6 +2,7 @@
 <?php
 
 use App\Kernel;
+use App\Otel\Tracing;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Dotenv\Dotenv;
@@ -9,6 +10,11 @@ use Symfony\Component\Dotenv\Dotenv;
 set_time_limit(0);
 
 require dirname(__DIR__).'/vendor/autoload.php';
+
+Tracing::init(
+    $_SERVER['OTEL_SERVICE_NAME'] ?? $_ENV['OTEL_SERVICE_NAME'] ?? 'user-service',
+    $_SERVER['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? $_ENV['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? 'http://otel-collector:4318'
+);
 
 if (!class_exists(Application::class)) {
     throw new LogicException('You need to add "symfony/framework-bundle" as a Composer dependency for the console to work. Try running "composer require symfony/framework-bundle".');

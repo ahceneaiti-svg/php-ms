@@ -5,7 +5,8 @@ RUN install-php-extensions \
     intl \
     zip \
     opcache \
-    apcu
+    apcu \
+    sockets
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*

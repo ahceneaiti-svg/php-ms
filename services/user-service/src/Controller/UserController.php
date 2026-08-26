@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Messaging\UserEventPublisher;
 use App\Repository\UserRepository;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -14,6 +15,7 @@ class UserController
 {
     public function __construct(
         private readonly UserRepository $userRepository,
+        private readonly UserEventPublisher $userEventPublisher,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -58,6 +60,14 @@ class UserController
         $this->userRepository->save($user);
 
         $this->logger->info('Utilisateur cree', ['user_id' => $user->getId(), 'email' => $user->getEmail()]);
+
+        // Publication asynchrone (RabbitMQ) -> notification-service envoie l'email de bienvenue.
+        $this->userEventPublisher->publishUserRegistered(
+            $user->getId(),
+            $user->getEmail(),
+            $user->getFirstName(),
+            $user->getLastName(),
+        );
 
         return new JsonResponse($user->toArray(), 201);
     }
