@@ -76,4 +76,50 @@ final class UserServiceClient
             $span?->end();
         }
     }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function listUsers(): array
+    {
+        $tracer = Tracing::tracer();
+        $span = $tracer?->spanBuilder('GET /api/users')
+            ->setSpanKind(SpanKind::KIND_CLIENT)
+            ->setAttribute('http.method', 'GET')
+            ->setAttribute('peer.service', 'user-service')
+            ->startSpan();
+
+        $scope = $span?->activate();
+
+        $headers = [];
+        if ($span) {
+            TraceContextPropagator::getInstance()->inject($headers);
+        }
+
+        try {
+            $response = $this->httpClient->request(
+                'GET',
+                rtrim($this->userServiceBaseUrl, '/').'/api/users',
+                [
+                    'headers' => $headers,
+                    'timeout' => 5,
+                ]
+            );
+
+            $span?->setAttribute('http.status_code', $response->getStatusCode());
+
+            return $response->toArray();
+        } catch (HttpExceptionInterface $e) {
+            $this->logger->error('Impossible de recuperer la liste des utilisateurs depuis user-service', [
+                'exception' => $e->getMessage(),
+            ]);
+            $span?->recordException($e);
+            $span?->setStatus(StatusCode::STATUS_ERROR, $e->getMessage());
+
+            throw $e;
+        } finally {
+            $scope?->detach();
+            $span?->end();
+        }
+    }
 }

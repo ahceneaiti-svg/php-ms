@@ -49,6 +49,20 @@ docker compose exec user-service php bin/console doctrine:schema:create
 docker compose exec client-service php bin/console doctrine:schema:create
 ```
 
+## Donnees de demo (fixtures)
+
+`doctrine/doctrine-fixtures-bundle` + `fakerphp/faker` (dev uniquement).
+Les fixtures `client-service` recuperent les utilisateurs reels via l'API
+`user-service` (`GET /api/users`) pour rattacher chaque client genere a un
+`userId` existant — a charger dans cet ordre :
+
+```bash
+docker compose exec user-service php bin/console doctrine:fixtures:load --no-interaction
+docker compose exec client-service php bin/console doctrine:fixtures:load --no-interaction
+```
+
+Voir [INSTALL.md](INSTALL.md#6-charger-des-données-de-démo-fixtures) pour le detail.
+
 ## Tester
 
 ```bash

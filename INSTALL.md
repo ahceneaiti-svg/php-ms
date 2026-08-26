@@ -97,7 +97,32 @@ docker compose exec postgres psql -U app -d client_db -c '\dt'
 Si vous modifiez une entité plus tard, `doctrine:schema:update --force`
 (dev uniquement — en prod, passer par de vraies migrations).
 
-## 6. Vérifier que tout tourne
+## 6. Charger des données de démo (fixtures)
+
+`doctrine/doctrine-fixtures-bundle` + `fakerphp/faker` sont installés en
+dépendances dev (bundle actif uniquement en `dev`/`test`, jamais en `prod`).
+Les fixtures `client-service` appellent l'API `user-service` (via
+`UserServiceClient`) pour rattacher chaque client généré à un utilisateur
+réellement existant — **l'ordre compte** :
+
+```bash
+# 1. d'abord user-service (genere 20 utilisateurs)
+docker compose exec user-service php bin/console doctrine:fixtures:load --no-interaction
+
+# 2. puis client-service (genere 30 clients, rattaches a des userId reels
+#    recuperes via GET /api/users sur user-service)
+docker compose exec client-service php bin/console doctrine:fixtures:load --no-interaction
+```
+
+`doctrine:fixtures:load` purge la table avant de recharger (rejouable sans
+conflit d'unicité sur `email`). Si vous rechargez `client-service` sans
+avoir de `user-service` accessible ou vide, la commande échoue avec un
+message explicite plutôt que de créer des `userId` orphelins.
+
+Sans `--no-interaction`, la commande demande confirmation avant la purge —
+utile en session interactive, à éviter en script/CI.
+
+## 7. Vérifier que tout tourne
 
 ### Healthchecks applicatifs
 
@@ -142,7 +167,7 @@ client-service a bien appelé user-service en interne.
 Grafana : http://localhost:3000 (auth anonyme activée en dev, voir
 [README.md](README.md#a-adapter-avant-prod) pour la prod).
 
-## 7. Logs et arrêt
+## 8. Logs et arrêt
 
 ```bash
 docker compose logs -f user-service client-service
@@ -152,7 +177,7 @@ docker compose down          # arrête les conteneurs, garde les volumes (donné
 docker compose down -v       # arrête et supprime aussi les volumes (repart de zéro)
 ```
 
-## 8. Dépannage
+## 9. Dépannage
 
 **`composer install` échoue pendant le build (conflit de versions)**
 Le SDK PHP `open-telemetry/*` change vite. Entrer dans un conteneur
@@ -236,18 +261,23 @@ Fix : `docker compose restart otel-collector` après tout redémarrage de
 `tempo` isolé. Un `docker compose up -d` global (qui démarre tout dans
 l'ordre) n'est pas concerné.
 
+**`doctrine:fixtures:load` sur client-service échoue avec "Aucun utilisateur disponible"**
+Les fixtures `client-service` interrogent `GET {USER_SERVICE_URL}/api/users`
+en direct — chargez d'abord les fixtures `user-service` (voir section 6),
+et vérifiez qu'il répond : `curl http://localhost:8081/api/users`.
+
 **Prometheus target `DOWN`**
 Vérifier que le conteneur écoute bien sur le port 80 en interne (pas de
 mapping de port à changer côté `prometheus.yml`, qui utilise le réseau
 Docker interne `user-service:80` / `client-service:80`, pas les ports
 publiés `8081`/`8082`).
 
-## 9. Aller plus loin
+## 10. Aller plus loin
 
 - Ajouter des migrations Doctrine (`doctrine/doctrine-migrations-bundle`)
   plutôt que `schema:create`.
 - Ajouter des tests (`symfony/test-pack`) et un pipeline CI qui lance
-  `docker compose build` + un smoke test du scénario de la section 6.
+  `docker compose build` + un smoke test du scénario de la section 7.
 - Passer les credentials Postgres et `APP_SECRET` par des secrets Docker
   ou un vault plutôt que les `.env` committés (actuellement acceptable
   uniquement parce que ce sont des valeurs de dev factices).

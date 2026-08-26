@@ -31,6 +31,11 @@ docker compose exec client-service php bin/console doctrine:schema:create
 # after changing an entity
 docker compose exec <service> php bin/console doctrine:schema:update --force   # dev only
 
+# demo data (fixtures bundle is dev/test-only, see bundles.php) — ORDER MATTERS:
+# client-service's fixtures call GET /api/users on user-service to pick real userIds
+docker compose exec user-service php bin/console doctrine:fixtures:load --no-interaction
+docker compose exec client-service php bin/console doctrine:fixtures:load --no-interaction
+
 # logs
 docker compose logs -f user-service client-service
 docker compose logs -f otel-collector
@@ -91,7 +96,13 @@ src/Monolog/TraceProcessor.php  # injects trace_id/span_id into every log record
 src/Controller/
   HealthController.php  # GET /health
   MetricsController.php # GET /metrics — renders the APCu-backed CollectorRegistry
+src/DataFixtures/        # doctrine/doctrine-fixtures-bundle, loaded only in dev/test (see bundles.php)
 ```
+
+`client-service`'s `ClientFixtures` depends on `UserServiceClient::listUsers()`
+(a real HTTP call to `user-service`), not on hardcoded IDs — so it fails
+loudly if `user-service` fixtures haven't been loaded first, instead of
+silently creating clients pointing at nonexistent users.
 
 **`Kernel::configureContainer` must explicitly `import('../config/services.yaml')`** in
 addition to the `config/packages/*.yaml` glob — this is not the stock
