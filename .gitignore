@@ -1,0 +1,6 @@
+/services/*/vendor/
+/services/*/var/
+/services/*/.env.local
+/services/*/.env.*.local
+.DS_Store
+.claude/

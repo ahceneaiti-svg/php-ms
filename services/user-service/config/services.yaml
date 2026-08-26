@@ -1,0 +1,19 @@
+parameters:
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/Kernel.php'
+            - '../src/Entity/'
+
+    monolog.formatter.json:
+        class: Monolog\Formatter\JsonFormatter
+
+    App\Monolog\TraceProcessor:
+        tags:
+            - { name: monolog.processor }

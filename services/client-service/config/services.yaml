@@ -1,0 +1,24 @@
+parameters:
+    user_service.base_url: '%env(USER_SERVICE_URL)%'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/Kernel.php'
+            - '../src/Entity/'
+
+    monolog.formatter.json:
+        class: Monolog\Formatter\JsonFormatter
+
+    App\Monolog\TraceProcessor:
+        tags:
+            - { name: monolog.processor }
+
+    App\Service\UserServiceClient:
+        arguments:
+            $userServiceBaseUrl: '%user_service.base_url%'

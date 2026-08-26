@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'user-service'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['user-service:80']
+        labels:
+          service: user-service
+
+  - job_name: 'client-service'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['client-service:80']
+        labels:
+          service: client-service
