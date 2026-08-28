@@ -1,0 +1,124 @@
+# Postgres 16 avec 2 bases (user_db, client_db), créées au premier démarrage
+# du volume par scripts/postgres/init-multiple-dbs.sh (repris tel quel ici,
+# monté dans /docker-entrypoint-initdb.d). StatefulSet + PVC car il s'agit
+# de données persistantes — voir CLAUDE.md § gotchas (le script ne rejoue
+# qu'à la création du volume, un changement ultérieur nécessite de recréer
+# le PVC, équivalent du `docker compose down -v`).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: microservices
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+data:
+  init-multiple-dbs.sh: |
+    #!/bin/bash
+    set -e
+    set -u
+
+    function create_database() {
+    	local database=$1
+    	echo "Creating database '$database'"
+    	psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
+    	    CREATE DATABASE $database;
+    EOSQL
+    }
+
+    if [ -n "${POSTGRES_MULTIPLE_DATABASES:-}" ]; then
+    	echo "Multiple database creation requested: $POSTGRES_MULTIPLE_DATABASES"
+    	for db in $(echo "$POSTGRES_MULTIPLE_DATABASES" | tr ',' ' '); do
+    		create_database "$db"
+    	done
+    	echo "Multiple databases created"
+    fi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: microservices
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/component: database
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+              name: postgres
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+              subPath: postgres
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "app"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "app"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: postgres-init-scripts
+            defaultMode: 0755
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: microservices
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432

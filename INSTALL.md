@@ -341,7 +341,15 @@ mapping de port à changer côté `prometheus.yml`, qui utilise le réseau
 Docker interne `user-service:80` / `client-service:80`, pas les ports
 publiés `8081`/`8082`).
 
-## 10. Aller plus loin
+## 10. Déployer sur Kubernetes (minikube)
+
+Ce guide couvre uniquement `docker-compose`. Pour déployer la même stack sur
+un cluster minikube (manifestes Deployment/StatefulSet/ConfigMap/Secret/HPA/
+Ingress, Jobs de bootstrap équivalents aux sections 5-6 ci-dessus), voir
+[k8s/README.md](k8s/README.md). C'est une cible additionnelle, pas un
+remplacement de `docker-compose.yml`.
+
+## 11. Aller plus loin
 
 - Ajouter des migrations Doctrine (`doctrine/doctrine-migrations-bundle`)
   plutôt que `schema:create`.

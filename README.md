@@ -140,6 +140,15 @@ depuis un log Loki contenant `trace_id` vers la trace Tempo.
   `user_events.dlx` → queue `notification_service.user_registered.dead`
   en cas d'echec de traitement (email invalide, mailer down...).
 
+## Déploiement Kubernetes (minikube)
+
+Un dossier [`k8s/`](k8s/README.md) fournit les manifestes pour déployer la
+même stack sur un cluster minikube (namespace dédié, Deployments/StatefulSets,
+ConfigMap/Secret, HPA, Ingress optionnel, Jobs de bootstrap schema/fixtures).
+C'est une cible de déploiement complémentaire à `docker-compose.yml`, pas un
+remplacement — voir [k8s/README.md](k8s/README.md) pour le détail (build des
+images dans le daemon Docker de minikube, ordre d'application, accès aux UIs).
+
 ## A adapter avant prod
 
 - Versions exactes des paquets `open-telemetry/*` a verifier/ajuster

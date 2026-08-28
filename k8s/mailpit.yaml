@@ -1,0 +1,66 @@
+# Mailpit — boîte mail de dev (SMTP:1025, UI:8025). Pas de persistance requise.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  namespace: microservices
+  labels:
+    app.kubernetes.io/name: mailpit
+    app.kubernetes.io/component: mail
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mailpit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mailpit
+        app.kubernetes.io/component: mail
+    spec:
+      containers:
+        - name: mailpit
+          image: axllent/mailpit:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 1025
+              name: smtp
+            - containerPort: 8025
+              name: http
+          readinessProbe:
+            tcpSocket:
+              port: 8025
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8025
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  namespace: microservices
+  labels:
+    app.kubernetes.io/name: mailpit
+    app.kubernetes.io/component: mail
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: mailpit
+  ports:
+    - name: smtp
+      port: 1025
+      targetPort: 1025
+    - name: http
+      port: 8025
+      targetPort: 8025

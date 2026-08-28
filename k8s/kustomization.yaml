@@ -1,0 +1,30 @@
+# kubectl apply -k k8s/
+#
+# Déploie toute la stack "vivante" (namespace, config, secrets, infra,
+# observabilité, 3 services applicatifs). Les Jobs de bootstrap DB
+# (jobs-bootstrap.yaml : doctrine:schema:create + fixtures) sont
+# volontairement EXCLUS d'ici — ce sont des étapes one-shot à ordonner
+# manuellement, voir README.md § "Bootstrap base de données et données de
+# démo".
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: microservices
+
+resources:
+  - namespace.yaml
+  - configmap-app.yaml
+  - secrets.yaml
+  - postgres.yaml
+  - rabbitmq.yaml
+  - mailpit.yaml
+  - otel-collector.yaml
+  - tempo.yaml
+  - prometheus.yaml
+  - loki.yaml
+  - promtail.yaml
+  - grafana.yaml
+  - user-service.yaml
+  - client-service.yaml
+  - notification-service.yaml
+  - ingress.yaml

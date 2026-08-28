@@ -102,6 +102,17 @@ Observability UIs: Grafana `:3000` (anonymous auth enabled in dev),
 Prometheus `:9090`, Tempo query API `:3200`, Loki `:3100`, RabbitMQ
 management `:15672` (guest/guest), Mailpit `:8025`.
 
+### Kubernetes (minikube)
+
+`k8s/` has manifests to run this same stack on a minikube cluster (own
+namespace, Deployments/StatefulSets, ConfigMap/Secret, HPA, optional
+Ingress, bootstrap Jobs for schema/fixtures). It's a separate deployment
+target from `docker-compose.yml`, not a replacement — see `k8s/README.md`
+for build/apply/bootstrap instructions and the two deliberate adaptations
+made for Kubernetes (Promtail scraping via `kubernetes_sd_configs` instead
+of `docker_sd_configs`; no shared-package Job orchestration, so the
+schema/fixtures ordering is manual, documented there).
+
 ## Architecture
 
 ### Per-service layout (identical shape in `user-service` and `client-service`)

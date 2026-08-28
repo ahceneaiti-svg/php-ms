@@ -1,0 +1,20 @@
+# Variables d'environnement non sensibles, communes aux 3 services Symfony.
+# OTEL_SERVICE_NAME est spécifique à chaque service et reste défini
+# directement dans son Deployment (voir user-service.yaml, client-service.yaml,
+# notification-service.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: microservices
+  labels:
+    app.kubernetes.io/part-of: microservices-demo
+data:
+  APP_ENV: "dev"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+  USER_SERVICE_URL: "http://user-service"
+  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_VHOST: "/"
+  MAILER_DSN: "smtp://mailpit:1025"
+  MAIL_FROM: "notifications@php-ms.local"

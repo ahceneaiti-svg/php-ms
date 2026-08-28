@@ -1,0 +1,183 @@
+# Jobs one-shot, équivalents des commandes manuelles listées dans CLAUDE.md :
+#   doctrine:schema:create (user-service, client-service)
+#   doctrine:fixtures:load (user-service PUIS client-service — voir README)
+#
+# Ces 4 Jobs ne sont PAS chaînés automatiquement (pas d'orchestrateur type
+# Argo/Tekton dans ce repo) : appliquer/attendre dans l'ordre décrit dans
+# k8s/README.md § "Bootstrap base de données et données de démo". En résumé :
+#   1. job-user-service-schema-create + job-client-service-schema-create (parallèle OK)
+#   2. attendre leur complétion
+#   3. job-user-service-fixtures (attendre sa complétion)
+#   4. job-client-service-fixtures (dépend du user-service *Deployment*, pas
+#      seulement du Job schema — ClientFixtures appelle GET /api/users en HTTP)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: user-service-schema-create
+  namespace: microservices
+  labels:
+    app.kubernetes.io/name: user-service
+    app.kubernetes.io/component: db-bootstrap
+    bootstrap-step: schema
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: user-service
+        app.kubernetes.io/component: db-bootstrap
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: schema-create
+          image: user-service:local
+          imagePullPolicy: IfNotPresent
+          command: ["php", "bin/console", "doctrine:schema:create"]
+          env:
+            - name: APP_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: APP_ENV
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: USER_DATABASE_URL
+            - name: APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: USER_SERVICE_APP_SECRET
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: client-service-schema-create
+  namespace: microservices
+  labels:
+    app.kubernetes.io/name: client-service
+    app.kubernetes.io/component: db-bootstrap
+    bootstrap-step: schema
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: client-service
+        app.kubernetes.io/component: db-bootstrap
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: schema-create
+          image: client-service:local
+          imagePullPolicy: IfNotPresent
+          command: ["php", "bin/console", "doctrine:schema:create"]
+          env:
+            - name: APP_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: APP_ENV
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: CLIENT_DATABASE_URL
+            - name: APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: CLIENT_SERVICE_APP_SECRET
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: user-service-fixtures
+  namespace: microservices
+  labels:
+    app.kubernetes.io/name: user-service
+    app.kubernetes.io/component: db-bootstrap
+    bootstrap-step: fixtures
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: user-service
+        app.kubernetes.io/component: db-bootstrap
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: fixtures
+          image: user-service:local
+          imagePullPolicy: IfNotPresent
+          command: ["php", "bin/console", "doctrine:fixtures:load", "--no-interaction"]
+          env:
+            - name: APP_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: APP_ENV
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: USER_DATABASE_URL
+            - name: APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: USER_SERVICE_APP_SECRET
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: client-service-fixtures
+  namespace: microservices
+  labels:
+    app.kubernetes.io/name: client-service
+    app.kubernetes.io/component: db-bootstrap
+    bootstrap-step: fixtures
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: client-service
+        app.kubernetes.io/component: db-bootstrap
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: fixtures
+          image: client-service:local
+          imagePullPolicy: IfNotPresent
+          # ClientFixtures fait un vrai GET /api/users sur user-service pour
+          # récupérer des userIds réels — le Deployment user-service doit
+          # être Ready, pas seulement son Job schema-create/fixtures terminé.
+          command: ["php", "bin/console", "doctrine:fixtures:load", "--no-interaction"]
+          env:
+            - name: APP_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: APP_ENV
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: CLIENT_DATABASE_URL
+            - name: USER_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: USER_SERVICE_URL
+            - name: APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: CLIENT_SERVICE_APP_SECRET

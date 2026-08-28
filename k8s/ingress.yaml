@@ -1,0 +1,94 @@
+# Ingress optionnel — nécessite l'addon ingress de minikube :
+#   minikube addons enable ingress
+#
+# Puis ajouter au /etc/hosts (IP = `minikube ip`) :
+#   <minikube ip>  user-service.microservices.local client-service.microservices.local \
+#                  notification-service.microservices.local grafana.microservices.local \
+#                  rabbitmq.microservices.local mailpit.microservices.local \
+#                  prometheus.microservices.local
+#
+# Alternative sans Ingress : `minikube service <service> -n microservices`
+# ou `kubectl -n microservices port-forward svc/<service> <local>:<port>`
+# (voir k8s/README.md).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: microservices
+  namespace: microservices
+  labels:
+    app.kubernetes.io/part-of: microservices-demo
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: user-service.microservices.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: user-service
+                port:
+                  number: 80
+    - host: client-service.microservices.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: client-service
+                port:
+                  number: 80
+    - host: notification-service.microservices.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service
+                port:
+                  number: 80
+    - host: grafana.microservices.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+    - host: rabbitmq.microservices.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rabbitmq-management
+                port:
+                  number: 15672
+    - host: mailpit.microservices.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mailpit
+                port:
+                  number: 8025
+    - host: prometheus.microservices.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus
+                port:
+                  number: 9090

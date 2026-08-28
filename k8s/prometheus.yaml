@@ -1,0 +1,131 @@
+# Prometheus scrape directement /metrics des 3 services applicatifs (pas via
+# l'OTel Collector — voir CLAUDE.md § Observability data flow). Cibles en
+# DNS de Service k8s (ClusterIP), port 80 comme en docker-compose.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: microservices
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: observability
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: 'user-service'
+        metrics_path: /metrics
+        static_configs:
+          - targets: ['user-service:80']
+            labels:
+              service: user-service
+
+      - job_name: 'client-service'
+        metrics_path: /metrics
+        static_configs:
+          - targets: ['client-service:80']
+            labels:
+              service: client-service
+
+      - job_name: 'notification-service'
+        metrics_path: /metrics
+        static_configs:
+          - targets: ['notification-service:80']
+            labels:
+              service: notification-service
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+  namespace: microservices
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: observability
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: microservices
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: observability
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: prometheus
+        app.kubernetes.io/component: observability
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9090
+              name: http
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+              readOnly: true
+            - name: prometheus-data
+              mountPath: /prometheus
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: prometheus-data
+          persistentVolumeClaim:
+            claimName: prometheus-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: microservices
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: observability
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
