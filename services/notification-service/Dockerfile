@@ -1,4 +1,4 @@
-FROM dunglas/frankenphp:php8.3
+FROM dunglas/frankenphp:php8.4
 
 RUN install-php-extensions \
     intl \
