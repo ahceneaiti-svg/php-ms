@@ -31,7 +31,8 @@
         "sort-packages": true,
         "platform": {
             "php": "8.3.33"
-        }
+        },
+        "platform-check": false
     },
     "autoload": {
         "psr-4": {
