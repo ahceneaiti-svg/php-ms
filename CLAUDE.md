@@ -252,9 +252,23 @@ exactly this reason).
 - If `tempo` is restarted in isolation (not the whole stack), `otel-collector`
   keeps a stale gRPC connection to its old IP and every export fails with
   `no children to pick from` until `otel-collector` is restarted too.
-- `symfony/*` packages are pinned to `^7.2`, not `7.1.*` — the entire 7.1
-  branch was rejected by Composer's built-in security-advisory audit
-  (Composer ≥ 2.8) at build time.
+- The three services run on `dunglas/frankenphp:php8.4` (PHP 8.4.x) with
+  `symfony/*` at `^7.3` (currently resolves to 7.4). Earlier PHP 8.3 +
+  `^7.2` broke: with no lock, `composer install` re-resolved on every build,
+  the whole 7.2 branch fell to Composer's security-advisory audit
+  (Composer ≥ 2.8) — same fate as 7.1 before it — so Composer jumped to
+  Symfony 7.3, which needs PHP ≥ 8.4.1. On the 8.3 image that surfaced two
+  ways: `vendor/composer/platform_check.php` fatal (`>= 8.4.1`), and — once
+  that was bypassed — `ProxyHelper::generateLazyGhost()` undefined (7.3
+  moved lazy proxies onto native PHP 8.4 lazy objects). `/health` returned
+  500, the Kubernetes liveness probe killed the pod in a loop.
+- Each service now commits a `composer.lock` (`config.platform.php` pinned
+  to `8.4.25`) — builds are reproducible and no longer drift into whichever
+  Symfony minor is newest at build time. Regenerate a lock inside a
+  container (no local PHP): `docker run --rm -v "$PWD/services/<name>":/app
+  -w /app composer:2 composer update --no-scripts --no-autoloader
+  --ignore-platform-req=ext-apcu --ignore-platform-req=ext-sockets
+  --ignore-platform-req=ext-pcntl`, then rebuild the image.
 - Postgres holds two databases (`user_db`, `client_db`) created once by
   `scripts/postgres/init-multiple-dbs.sh` via `POSTGRES_MULTIPLE_DATABASES`
   — this only runs on first volume creation; changing the script later

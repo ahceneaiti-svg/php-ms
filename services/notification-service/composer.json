@@ -1,7 +1,7 @@
 {
     "type": "project",
     "require": {
-        "php": ">=8.2",
+        "php": ">=8.4",
         "ext-ctype": "*",
         "ext-iconv": "*",
         "ext-apcu": "*",
@@ -15,14 +15,14 @@
         "php-amqplib/php-amqplib": "^3.5",
         "php-http/discovery": "^1.19",
         "promphp/prometheus_client_php": "^2.10",
-        "symfony/console": "^7.2",
-        "symfony/dotenv": "^7.2",
-        "symfony/framework-bundle": "^7.2",
-        "symfony/http-client": "^7.2",
-        "symfony/mailer": "^7.2",
+        "symfony/console": "^7.3",
+        "symfony/dotenv": "^7.3",
+        "symfony/framework-bundle": "^7.3",
+        "symfony/http-client": "^7.3",
+        "symfony/mailer": "^7.3",
         "symfony/monolog-bundle": "^3.10",
-        "symfony/psr-http-message-bridge": "^7.2",
-        "symfony/yaml": "^7.2"
+        "symfony/psr-http-message-bridge": "^7.3",
+        "symfony/yaml": "^7.3"
     },
     "config": {
         "allow-plugins": {
@@ -30,9 +30,8 @@
         },
         "sort-packages": true,
         "platform": {
-            "php": "8.3.33"
-        },
-        "platform-check": false
+            "php": "8.4.25"
+        }
     },
     "autoload": {
         "psr-4": {
