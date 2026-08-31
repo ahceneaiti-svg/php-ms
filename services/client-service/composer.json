@@ -33,7 +33,10 @@
         "allow-plugins": {
             "php-http/discovery": true
         },
-        "sort-packages": true
+        "sort-packages": true,
+        "platform": {
+            "php": "8.3.33"
+        }
     },
     "autoload": {
         "psr-4": {
