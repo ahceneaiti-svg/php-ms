@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: client-service
-          image: ahceneaiti/client-service:latest
+          image: ahceneaiti/client-service:1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 80

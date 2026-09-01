@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
         - name: notification-service
-          image: ahceneaiti/notification-service:latest
+          image: ahceneaiti/notification-service:1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 80
