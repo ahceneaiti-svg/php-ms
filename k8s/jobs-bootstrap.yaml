@@ -31,8 +31,8 @@ spec:
       restartPolicy: Never
       containers:
         - name: schema-create
-          image: user-service:local
-          imagePullPolicy: IfNotPresent
+          image: ahceneaiti/user-service:1.0
+          imagePullPolicy: Always
           command: ["php", "bin/console", "doctrine:schema:create"]
           env:
             - name: APP_ENV
@@ -72,8 +72,8 @@ spec:
       restartPolicy: Never
       containers:
         - name: schema-create
-          image: client-service:local
-          imagePullPolicy: IfNotPresent
+          image: ahceneaiti/client-service:1.0
+          imagePullPolicy: Always
           command: ["php", "bin/console", "doctrine:schema:create"]
           env:
             - name: APP_ENV
@@ -113,8 +113,8 @@ spec:
       restartPolicy: Never
       containers:
         - name: fixtures
-          image: user-service:local
-          imagePullPolicy: IfNotPresent
+          image: ahceneaiti/user-service:1.0
+          imagePullPolicy: Always
           command: ["php", "bin/console", "doctrine:fixtures:load", "--no-interaction"]
           env:
             - name: APP_ENV
@@ -154,8 +154,8 @@ spec:
       restartPolicy: Never
       containers:
         - name: fixtures
-          image: client-service:local
-          imagePullPolicy: IfNotPresent
+          image: ahceneaiti/client-service:1.0
+          imagePullPolicy: Always
           # ClientFixtures fait un vrai GET /api/users sur user-service pour
           # récupérer des userIds réels — le Deployment user-service doit
           # être Ready, pas seulement son Job schema-create/fixtures terminé.
