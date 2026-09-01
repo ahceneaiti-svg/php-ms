@@ -32,8 +32,8 @@ spec:
     spec:
       containers:
         - name: notification-service
-          image: notification-service:local
-          imagePullPolicy: IfNotPresent
+          image: ahceneaiti/notification-service:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
               name: http

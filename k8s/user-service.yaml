@@ -1,6 +1,7 @@
 # user-service — possède les users, publie "user.registered" sur RabbitMQ
 # (best effort) après POST /api/users. Image buildée localement pour
-# minikube (voir k8s/README.md), tag fixe -> imagePullPolicy IfNotPresent.
+# minikube (voir k8s/README.md). Image poussée sur Docker Hub
+# (ahceneaiti/*:latest) -> imagePullPolicy Always.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -22,8 +23,8 @@ spec:
     spec:
       containers:
         - name: user-service
-          image: user-service:local
-          imagePullPolicy: IfNotPresent
+          image: ahceneaiti/user-service:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
               name: http
